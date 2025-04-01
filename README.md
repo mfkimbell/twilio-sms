@@ -14,3 +14,6 @@ The client stores only a session ID (usually in a cookie).
 
 
 store secrets in .env file, nextJS loads this automatically
+
+
+we could use `jest` for testing
