@@ -1,6 +1,8 @@
 # twilio-sms
 
-maybe use prisma orm
+`.env` for secrets
+
+maybe use prisma orm, lets not use an ORM, since we need to refresh on SQL
 
 
 lets try to add redis caching eventually
