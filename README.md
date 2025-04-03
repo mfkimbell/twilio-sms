@@ -17,3 +17,6 @@ store secrets in .env file, nextJS loads this automatically
 
 
 we could use `jest` for testing
+
+
+we are going to be using Redux because that's what tilio uses
