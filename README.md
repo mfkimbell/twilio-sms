@@ -1,5 +1,7 @@
 # twilio-sms
 
+lets use redux for toast notifications
+
 `.env` for secrets
 
 maybe use prisma orm, lets not use an ORM, since we need to refresh on SQL
