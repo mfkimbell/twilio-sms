@@ -3,7 +3,7 @@
 interface Message {
   messageId?: string;
   senderId: string;
-  recipientId: string;
+  recipientIds?: string[];
   body: string;
   direction: 'incoming' | 'outgoing';
 }
