@@ -5,6 +5,10 @@
 
 <img width="667" alt="Screenshot 2025-04-08 at 12 08 35 AM" src="https://github.com/user-attachments/assets/e25fe8de-9393-47b6-824f-6a882ff55129" />
 
+## Architechture
+
+<img width="1300" alt="sms_arch" src="https://github.com/user-attachments/assets/95ab688d-c8de-4d37-b686-09cdf1b6e49f" />
+
 
 OnSnapshot sits on the frontend waiting for the database to change, when it detects a change, it cauess a component rerender. If we did it on the backend, we would have to notify the frontend in some way, 
 
