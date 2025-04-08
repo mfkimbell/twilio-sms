@@ -3,34 +3,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import admin from 'firebase-admin';
 
-// Initialize firebase-admin only if not already initialized.
+// Initialize Firebase Admin only once using the minimal required keys.
 if (!admin.apps.length) {
-  // Only include the required keys.
-  const serviceAccount = {
-    projectId: process.env.FIREBASE_PROJECT_ID!,
-    // Replace escaped newline characters with real newlines
-    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')!,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL!,
-  };
-
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID!,
+      // Replace literal "\n" with actual newline characters.
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')!,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL!,
+    }),
   });
 }
 
 const db = admin.firestore();
 
 export async function POST(req: NextRequest) {
-  // Twilio sends SMS data as form-data.
+  // Parse incoming Twilio form-data.
   const formData = await req.formData();
-  const from = formData.get('From')?.toString();
-  const to = formData.get('To')?.toString();
+  const from = formData.get('From')?.toString(); // external sender's number
+  const to = formData.get('To')?.toString();     // should equal the sandbox number
   const body = formData.get('Body')?.toString();
 
-  // Expected Twilio sandbox number that the admin uses.
+  // Define the expected Twilio sandbox number that represents the admin's number.
   const twilioSandbox = 'whatsapp:+14155238886';
 
-  // Validate that the message is sent to your expected Twilio sandbox number.
+  // Validate that the "To" field matches the sandbox number.
   if (!to || to !== twilioSandbox) {
     console.warn(`Received SMS for unexpected 'To' number: ${to}`);
     return NextResponse.json(
@@ -39,7 +36,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Validate required fields.
+  // Ensure required fields are present.
   if (!from || !body) {
     return NextResponse.json(
       { error: 'Missing required fields from the SMS request' },
@@ -47,74 +44,58 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Extract the sender's number (the external contact).
-  let incomingNumber = from;
-  if (incomingNumber.startsWith('whatsapp:')) {
-    incomingNumber = incomingNumber.replace('whatsapp:', '');
+  // The "From" field is the external (customer) number.
+  // Remove the "whatsapp:" prefix if present.
+  let customerNumber = from;
+  if (customerNumber.startsWith('whatsapp:')) {
+    customerNumber = customerNumber.replace('whatsapp:', '');
   }
 
-  // The message comes from an external contact.
-  // We want the admin (user "1") to see it.
-  // Look for an existing contact based on the incoming number.
+  // Look for an existing contact matching the customer's phone number.
   const contactsSnapshot = await db
     .collection('contacts')
-    .where('phoneNumber', '==', incomingNumber)
+    .where('phoneNumber', '==', customerNumber)
     .get();
 
   let contactId = '';
   let conversationId = '';
-  const adminId = '1'; // Admin's ID
+  const adminId = '1'; // Hard-coded admin user ID.
 
   if (!contactsSnapshot.empty) {
-    // Contact exists.
+    // Use the existing contact.
     const contactDoc = contactsSnapshot.docs[0];
     contactId = contactDoc.id;
-
-    // Look for an existing conversation between the admin and this contact.
-    const convSnapshot = await db
-      .collection('conversations')
-      .where('participants', 'array-contains', adminId)
-      .where('contactId', '==', contactId)
-      .get();
-
-    if (!convSnapshot.empty) {
-      conversationId = convSnapshot.docs[0].id;
-    } else {
-      // Create a new conversation if it doesn't exist.
-      const newConvRef = db.collection('conversations').doc();
-      conversationId = newConvRef.id;
-      const contactData = contactDoc.data();
-      await newConvRef.set({
-        conversationId,
-        participants: [adminId, contactId],
-        contactId,
-        contactName: contactData.name,
-        contactAvatar: contactData.profilePictureUrl || '/default-avatar.png',
-        lastMessageText: '',
-        lastMessageTime: admin.firestore.FieldValue.serverTimestamp(),
-        unreadCount: 0,
-      });
-    }
   } else {
-    // No contact exists: create a new one using the incoming number as the default name.
+    // No contact exists for this number; create one.
     const newContactRef = db.collection('contacts').doc();
     contactId = newContactRef.id;
     await newContactRef.set({
       contactId,
-      name: incomingNumber,
-      phoneNumber: incomingNumber,
+      name: customerNumber, // Default name is the number; you can update later.
+      phoneNumber: customerNumber,
       profilePictureUrl: '/default-avatar.png',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+  }
 
-    // Create a new conversation between the admin and this new contact.
+  // Check for an existing conversation between the admin and this contact.
+  const convSnapshot = await db
+    .collection('conversations')
+    .where('participants', 'array-contains', adminId)
+    .where('contactId', '==', contactId)
+    .get();
+
+  if (!convSnapshot.empty) {
+    conversationId = convSnapshot.docs[0].id;
+  } else {
+    // No conversation exists, so create a new one.
     const newConvRef = db.collection('conversations').doc();
     conversationId = newConvRef.id;
     await newConvRef.set({
       conversationId,
       participants: [adminId, contactId],
       contactId,
-      contactName: incomingNumber,
+      contactName: customerNumber, // Default name from the number.
       contactAvatar: '/default-avatar.png',
       lastMessageText: '',
       lastMessageTime: admin.firestore.FieldValue.serverTimestamp(),
@@ -122,31 +103,29 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Record the incoming message into Firestore.
+  // Record the incoming message in the "messages" collection.
+  // The sender is the external contact; the recipient is the admin.
   const messageRef = db.collection('messages').doc();
   await messageRef.set({
     messageId: messageRef.id,
-    senderId: contactId, // The sender is the external contact.
-    recipientId: adminId, // The admin is the recipient.
+    senderId: contactId, // Represents the external sender.
+    recipientId: adminId, // Represents the admin.
     body,
     direction: 'incoming',
     conversationId,
-    to: twilioSandbox, // Record the Twilio sandbox number for clarity.
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  // Update the conversation with the latest message.
+  // Update the conversation's latest message data and increment the unread count.
   await db.collection('conversations').doc(conversationId).update({
     lastMessageText: body,
     lastMessageTime: admin.firestore.FieldValue.serverTimestamp(),
     unreadCount: admin.firestore.FieldValue.increment(1),
   });
 
-  console.log(
-    `Incoming message from ${incomingNumber} recorded in conversation: ${conversationId}`
-  );
+  console.log(`Incoming message from ${customerNumber} recorded in conversation ${conversationId}`);
 
-  // Respond with a valid TwiML response.
+  // Return a valid TwiML response to Twilio.
   return new NextResponse(
     '<Response><Message>Thanks, got it!</Message></Response>',
     { headers: { 'Content-Type': 'text/xml' } }
