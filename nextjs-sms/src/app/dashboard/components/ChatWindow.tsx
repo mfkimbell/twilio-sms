@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { db,  } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import {
   collection,
   query,
@@ -22,7 +22,7 @@ interface ChatWindowProps {
 export interface Message {
   messageId?: string;
   senderId: string;
-  // For group messages, we can store recipientIds as an array
+  // For group messages, recipientIds can be stored as an array.
   recipientIds?: string[];
   body: string;
   direction: 'incoming' | 'outgoing';
@@ -33,12 +33,13 @@ export default function ChatWindow({ conversationId }: ChatWindowProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
 
+  // Mark the conversation as read (reset unread count & update last read timestamp)
   useEffect(() => {
     async function markConversationRead() {
       const conversationRef = doc(db, 'conversations', conversationId);
       await updateDoc(conversationRef, {
         unreadCount: 0,
-        lastRead: new Date(), // optional: store when it was last read
+        lastRead: new Date(), // Update the lastRead time
       });
     }
   
@@ -47,7 +48,7 @@ export default function ChatWindow({ conversationId }: ChatWindowProps) {
     }
   }, [conversationId]);
 
-  // Listen for live updates for messages in this conversation
+  // Listen for real-time updates for messages in the selected conversation.
   useEffect(() => {
     const q = query(
       collection(db, 'messages'),
@@ -66,11 +67,12 @@ export default function ChatWindow({ conversationId }: ChatWindowProps) {
     return () => unsubscribe();
   }, [conversationId]);
 
+  // Handle sending a new message.
   const handleSendMessage = async () => {
     if (!newMessage.trim()) return;
 
     try {
-      // 1. Fetch the conversation document to know participants
+      // 1. Fetch the conversation document to know which participants are involved.
       const conversationRef = doc(db, 'conversations', conversationId);
       const conversationSnap = await getDoc(conversationRef);
       if (!conversationSnap.exists()) {
@@ -80,10 +82,10 @@ export default function ChatWindow({ conversationId }: ChatWindowProps) {
         participants: string[];
       };
 
-      // 2. Filter out the admin (assumed ID is "1") to get recipients
+      // 2. Determine the recipient IDs by filtering out the admin (assumed to have ID "1").
       const recipientIds = conversation.participants.filter((id) => id !== '1');
 
-      // 3. For each recipient, fetch their phone number from the contacts collection
+      // 3. For each recipient, fetch their phone number from the "contacts" collection.
       const phoneNumbers: string[] = [];
       for (const recipientId of recipientIds) {
         const contactRef = doc(db, 'contacts', recipientId);
@@ -96,15 +98,15 @@ export default function ChatWindow({ conversationId }: ChatWindowProps) {
         }
       }
 
-      // 4. Send the SMS via the API route for each recipient
-      //    Your API route /api/sms-send uses POST with { message, to }
+      // 4. Send the SMS via your API route for each recipient.
+      //    Your API route "/api/sms-send" should accept a POST request with { message, to }.
       for (const to of phoneNumbers) {
         const response = await fetch('/api/sms-send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             message: newMessage.trim(),
-            to, // Recipient phone number
+            to, // Recipient's phone number
           }),
         });
         const result = await response.json();
@@ -115,17 +117,18 @@ export default function ChatWindow({ conversationId }: ChatWindowProps) {
         }
       }
 
-      // 5. If the messages were sent successfully via Twilio,
-      //    add one message document to Firestore to record the sent message.
+      // 5. Once the messages are sent successfully via Twilio,
+      //    record the outgoing message in Firestore.
       await addDoc(collection(db, 'messages'), {
-        senderId: '1', // admin
-        recipientIds,  // group recipients as an array
+        senderId: '1', // The admin's ID
+        recipientIds,  // Group recipients as an array
         body: newMessage.trim(),
         direction: 'outgoing',
         conversationId,
         createdAt: new Date(),
       });
 
+      // Clear the new message input after sending.
       setNewMessage('');
     } catch (err: any) {
       console.error('Failed to send message:', err);
