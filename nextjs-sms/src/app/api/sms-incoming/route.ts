@@ -18,6 +18,11 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 export async function POST(req: NextRequest) {
+  await db.collection('logs').add({
+    timestamp: new Date(),
+    message: 'Twilio webhook hit',
+  });
+
   console.log("WE HAVE AN INCOMING MESSGE")
   // Parse incoming Twilio form-data.
   const formData = await req.formData();
