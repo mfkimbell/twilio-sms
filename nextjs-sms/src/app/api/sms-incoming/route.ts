@@ -18,12 +18,15 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 export async function POST(req: NextRequest) {
+  console.log("WE HAVE AN INCOMING MESSGE")
   // Parse incoming Twilio form-data.
   const formData = await req.formData();
   const from = formData.get('From')?.toString(); // external sender's number
   const to = formData.get('To')?.toString();     // should equal the sandbox number
   const body = formData.get('Body')?.toString();
 
+  console.log("from", from)
+  console.log("body", body)
   // Define the expected Twilio sandbox number that represents the admin's number.
   const twilioSandbox = 'whatsapp:+14155238886';
 
