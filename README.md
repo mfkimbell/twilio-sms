@@ -1,9 +1,16 @@
 # twilio-sms
 
 
-## UI:
+## Admin UI
 
 <img width="667" alt="Screenshot 2025-04-08 at 12 08 35 AM" src="https://github.com/user-attachments/assets/e25fe8de-9393-47b6-824f-6a882ff55129" />
+
+## Client View
+
+![IMG_5279](h)
+
+<img width="167" alt="Screenshot 2025-04-08 at 12 08 35 AM" src="https://github.com/user-attachments/assets/f92e3a4d-fbbe-485b-ab9f-3f09d7f72cf6" />
+
 
 ## Architechture
 
